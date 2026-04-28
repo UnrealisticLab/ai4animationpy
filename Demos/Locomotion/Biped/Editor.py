@@ -7,10 +7,12 @@ from ai4animation import (
     AI4Animation,
     ContactModule,
     Dataset,
+    GuidanceModule,
+    MirrorModule,
     MotionEditor,
     MotionModule,
-    GuidanceModule,
     RootModule,
+    Vector3,
 )
 
 SCRIPT_DIR = Path(__file__).parent
@@ -24,36 +26,36 @@ class Program:
     def Start(self):
         editor = AI4Animation.Scene.AddEntity("MotionEditor")
         self.dataset = Dataset(
-                os.path.join(ASSETS_PATH, "Mocap", "style100"),
-                [
-                    lambda x: RootModule(
-                        x,
-                        Definitions.HipName,
-                        Definitions.LeftHipName,
-                        Definitions.RightHipName,
-                        Definitions.LeftShoulderName,
-                        Definitions.RightShoulderName,
-                        Definitions.NeckName,
-                    ),
-                    lambda x: MotionModule(x),
-                    lambda x: ContactModule(
-                        x,
-                        [
-                            (Definitions.LeftAnkleName, 0.1, 0.25),
-                            (Definitions.LeftBallName, 0.05, 0.25),
-                            (Definitions.RightAnkleName, 0.1, 0.25),
-                            (Definitions.RightBallName, 0.05, 0.25),
-                        ],
-                    ),
-                    lambda x: GuidanceModule(x),
-                ],
-            )
+            os.path.join(ASSETS_PATH, "Motions"),
+            [
+                lambda x: RootModule(
+                    x,
+                    Definitions.HipName,
+                    Definitions.LeftHipName,
+                    Definitions.RightHipName,
+                    Definitions.LeftShoulderName,
+                    Definitions.RightShoulderName,
+                    Definitions.NeckName,
+                ),
+                lambda x: MotionModule(x),
+                lambda x: ContactModule(
+                    x,
+                    [
+                        (Definitions.LeftAnkleName, 0.1, 0.25),
+                        (Definitions.LeftBallName, 0.05, 0.25),
+                        (Definitions.RightAnkleName, 0.1, 0.25),
+                        (Definitions.RightBallName, 0.05, 0.25),
+                    ],
+                ),
+                lambda x: GuidanceModule(x),
+                lambda x: MirrorModule(
+                    x, Vector3.Axis.ZPositive, Vector3.Create(0, 0, 180)
+                ),
+            ],
+        )
         bones = Definitions.FULL_BODY_NAMES
         editor.AddComponent(
-            MotionEditor,
-            self.dataset,
-            os.path.join(ASSETS_PATH, "Model.glb"),
-            bones
+            MotionEditor, self.dataset, os.path.join(ASSETS_PATH, "Model.glb"), bones
         )
 
         AI4Animation.Standalone.Camera.SetTarget(editor)

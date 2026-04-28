@@ -6,15 +6,16 @@ from ai4animation.Animation.Motion import Motion
 
 class Dataset:
     def __init__(self, directory, modules, max_files=None):
-        self.Directory = directory
+        self.Directory = directory if isinstance(directory, list) else [directory]
         self.Modules = modules
         self.Pool = []
         # Find all NPZ files in the directory and subdirectories
-        for root, _dirs, files in os.walk(directory):
-            for file in files:
-                if file.lower().endswith(".npz"):
-                    if max_files is None or len(self.Pool) < max_files:
-                        self.Pool.append(os.path.join(root, file))
+        for dir in self.Directory:
+            for root, _dirs, files in os.walk(dir):
+                for file in files:
+                    if file.lower().endswith(".npz"):
+                        if max_files is None or len(self.Pool) < max_files:
+                            self.Pool.append(os.path.join(root, file))
         self.Pool.sort()
         self.Filter()
 
@@ -29,8 +30,7 @@ class Dataset:
 
     def LoadMotion(self, index):
         motion = Motion.LoadFromNPZ(self.Files[index])
-        for module in self.Modules:
-            motion.AddModule(module)
+        motion.AddModules(self.Modules)
         return motion
 
     def Filter(self, id=None):

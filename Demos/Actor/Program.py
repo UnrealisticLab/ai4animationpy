@@ -21,8 +21,6 @@ class Program:
         )
         self.Actor.Entity.SetPosition(Vector3.Create(0, 0, 0))
 
-
-
     def Update(self):
         self.Actor.Entity.SetRotation(Rotation.Euler(0, 120 * Time.TotalTime, 0))
         # self.Actor.Entity.SetScale(

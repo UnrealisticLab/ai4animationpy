@@ -11,6 +11,9 @@ class MotionModule(Module):
     def __init__(self, motion: Motion) -> None:
         super().__init__(motion)
 
+    def Initialize(self):
+        pass
+
     def GetName(self):
         return "Motion"
 

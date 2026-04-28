@@ -6,16 +6,14 @@ from pathlib import Path
 import torch
 from ai4animation import (
     Actor,
-    AdamW,
     AI4Animation,
-    ContactModule,
-    CyclicScheduler,
     DataSampler,
     Dataset,
     FeedTensor,
-    MLP,
+    MirrorModule,
     MotionEditor,
     MotionModule,
+    MultiLayerPerceptron,
     Plotting,
     ReadTensor,
     RootModule,
@@ -32,18 +30,12 @@ ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Cranberry")
 sys.path.append(ASSETS_PATH)
 import Definitions
 
-FRAMERATE = 30
+EPOCH_COUNT = 150
 BATCH_SIZE = 32
-SMOOTHING_WINDOW = 2.0
+FRAMERATE = 30
+DRAW_INTERVAL = 500
 BONES = Definitions.FULL_BODY_NAMES
-# BONES = [
-#     Definitions.HEAD_NAME,
-#     Definitions.LEFT_WRIST_NAME,
-#     Definitions.RIGHT_WRIST_NAME,
-#     Definitions.HIPS_NAME,
-#     Definitions.LEFT_ANKLE_NAME,
-#     Definitions.RIGHT_ANKLE_NAME,
-# ]
+SMOOTHING_WINDOW = 2.0
 RESOLUTION = 11
 INPUT_DIM = RESOLUTION * len(BONES) * 9
 OUTPUT_DIM = len(Definitions.FULL_BODY_NAMES) * 9
@@ -68,6 +60,9 @@ class Program:
                     Definitions.NeckName,
                 ),
                 lambda x: MotionModule(x),
+                lambda x: MirrorModule(
+                    x, Vector3.Axis.ZPositive, Vector3.Create(0, 0, 180)
+                ),
             ],
             max_files=MAX_FILES,
         )
@@ -84,33 +79,24 @@ class Program:
             end=SMOOTHING_WINDOW / 2.0,
             samples=RESOLUTION,
         )
+
         self.ControlSeries = TimeSeries(start=-0.5, end=0.5, samples=RESOLUTION)
 
-        self.EpochCount = 150
-        self.DrawInterval = 500
-
         self.Network = Tensor.ToDevice(
-            MLP.Model(
-                input_dim=INPUT_DIM, output_dim=OUTPUT_DIM, hidden_dim=2048, dropout=0.1
+            MultiLayerPerceptron.Model(
+                input_dim=INPUT_DIM, output_dim=OUTPUT_DIM, hidden_dim=2048
             )
         )
 
-        self.Optimizer = AdamW(self.Network.parameters(), lr=1e-4, weight_decay=1e-4)
-        self.Scheduler = CyclicScheduler(
-            optimizer=self.Optimizer,
-            batch_size=self.DataSampler.BatchSize,
-            epoch_size=self.DataSampler.SampleCount,
-            restart_period=10,
-            t_mult=2,
-            policy="cosine",
-            verbose=True,
+        self.Optimizer = Utility.CosineAnnealingOptimizer(
+            self.Network.parameters(),
+            self.DataSampler.BatchSize,
+            self.DataSampler.SampleCount,
         )
 
-        self.Plotting = AI4Animation.Standalone is not None
-        if self.Plotting:
-            self.LossHistory = Plotting.LossHistory(
-                "Loss History", drawInterval=self.DrawInterval, yScale="log"
-            )
+        self.LossHistory = Plotting.LossHistory(
+            "Loss History", drawInterval=DRAW_INTERVAL, yScale="log"
+        )
 
         self.Paused = False
         self.Trainer = self.Training()
@@ -135,11 +121,6 @@ class Program:
             0.8, 0.10, 0.15, 0.04, 0.0, -1.0, 1.0, label="Offset Y"
         )
 
-    def GUI(self):
-        self.PauseButton.GUI()
-        self.OffsetY.GUI()
-        self.Paused = self.PauseButton.Active
-
     def Update(self):
         if self.Paused:
             return
@@ -149,33 +130,17 @@ class Program:
             pass
 
     def Training(self):
-        for epoch in range(1, self.EpochCount + 1):
+        for epoch in range(1, EPOCH_COUNT + 1):
+            print("Epoch", epoch)
             for xBatch, yBatch in self.DataSampler.SampleBatchesWithinMotions(
-                epoch, self.EpochCount
+                epoch, EPOCH_COUNT
             ):
-                _, losses = self.Network.learn(xBatch, yBatch, epoch == 1)
-                self.Optimizer.zero_grad()
-                sum(losses.values()).backward()
-                self.Optimizer.step()
-                self.Scheduler.batch_step()
-                if self.Plotting:
-                    for k, v in losses.items():
-                        self.LossHistory.Add((Plotting.ToNumpy(v), k))
+                _, loss = self.Network.learn(xBatch, yBatch, epoch == 1)
+                self.Optimizer.Update(yBatch.shape[0], loss["MSE Loss"])
+                for k, v in loss.items():
+                    self.LossHistory.Add((Plotting.ToNumpy(v), k))
                 yield
-
-            # Epoch Step
-            self.Scheduler.step()
-            if self.Plotting:
-                self.LossHistory.Print()
-
-            # Save Network
-            # checkpoints_dir = os.path.join(SCRIPT_DIR, "Training")
-            # Utility.MakeDirectory(checkpoints_dir)
-            # checkpoint_path = os.path.join(
-            #     checkpoints_dir, "Network_" + "E=" + str(epoch) + ".pt"
-            # )
-            # print("Saving PyTorch model to " + checkpoint_path + "")
-            # torch.save(self.Network, checkpoint_path)
+            self.LossHistory.Print()
 
     def GetTrainingFeatures(self, batch):
         motion, timestamps = batch
@@ -294,6 +259,11 @@ class Program:
             self.Simulated.SyncToScene()
 
         self.Network.train()
+
+    def GUI(self):
+        self.PauseButton.GUI()
+        self.OffsetY.GUI()
+        self.Paused = self.PauseButton.Active
 
 
 AI4Animation(Program(), mode=AI4Animation.Mode.STANDALONE)

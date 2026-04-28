@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from ai4animation.AI import Manifolds
 from einops import rearrange
 from torch.nn.parameter import Parameter
 
@@ -12,6 +13,8 @@ class LinearLayer(torch.nn.Module):
     def __init__(self, input_size, output_size, dropout, activation):
         super(LinearLayer, self).__init__()
 
+        self.InputSize = input_size
+        self.OutputSize = output_size
         self.Dropout = dropout
         self.Activation = activation
         self.Layer = nn.Linear(input_size, output_size)
@@ -140,6 +143,32 @@ class LinearEncoder(torch.nn.Module):
         z = self.L1(z)
         z = self.L2(z)
         z = self.L3(z)
+        return z
+
+
+class CategoricalEncoder(torch.nn.Module):
+    def __init__(
+        self, input_size, hidden_size, output_size, channels, dimensions, dropout
+    ):
+        super(CategoricalEncoder, self).__init__()
+
+        self.C = channels
+        self.D = dimensions
+
+        self.Encoder = LinearEncoder(
+            input_size, hidden_size, channels * dimensions, dropout
+        )
+        self.Decoder = LinearEncoder(
+            channels * dimensions, hidden_size, output_size, dropout
+        )
+
+    def forward(self, z):
+        z = self.Encoder(z)
+        if self.training:
+            z = Manifolds.gumbel(z, self.D)
+        else:
+            z = Manifolds.softmax(z, self.D)
+        z = self.Decoder(z)
         return z
 
 

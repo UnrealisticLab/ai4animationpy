@@ -7,10 +7,12 @@ from ai4animation import (
     AI4Animation,
     ContactModule,
     Dataset,
+    GuidanceModule,
+    MirrorModule,
     MotionEditor,
     MotionModule,
-    GuidanceModule,
     RootModule,
+    Vector3,
 )
 
 SCRIPT_DIR = Path(__file__).parent
@@ -49,6 +51,9 @@ class Program:
                         ],
                     ),
                     lambda x: GuidanceModule(x),
+                    lambda x: MirrorModule(
+                        x, Vector3.Axis.ZPositive, Vector3.Create(0, 0, 180)
+                    ),
                 ],
             ),
             os.path.join(ASSETS_PATH, "Model.glb"),

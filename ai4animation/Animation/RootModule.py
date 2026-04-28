@@ -36,10 +36,16 @@ class RootModule(Module):
         self.BoneIndices = motion.GetBoneIndices(
             [hip, left_hip, right_hip, left_shoulder, right_shoulder, neck]
         )
-        self.Hip, self.LeftHip, self.RightHip, self.LeftShoulder, self.RightShoulder, self.Neck = (
-            self.BoneIndices
-        )
+        (
+            self.Hip,
+            self.LeftHip,
+            self.RightHip,
+            self.LeftShoulder,
+            self.RightShoulder,
+            self.Neck,
+        ) = self.BoneIndices
 
+    def Initialize(self):
         self.StandardMatrices = self.Compute(False)
         self.MirroredMatrices = self.Compute(True)
 
@@ -96,11 +102,14 @@ class RootModule(Module):
             return matrices
         else:
             frame_indices = self.Motion.GetFrameIndices(timestamps)
-            return (
+            matrices = (
                 self.StandardMatrices[frame_indices]
                 if not mirrored
                 else self.MirroredMatrices[frame_indices]
             )
+            if self.Motion.Scale != 1.0:
+                matrices = Transform.Scale(matrices, self.Motion.Scale)
+            return matrices
 
     def GetPositions(self, timestamps, mirrored: bool, smoothing: TimeSeries = None):
         return Transform.GetPosition(
@@ -124,14 +133,6 @@ class RootModule(Module):
         pos_previous = self.GetPositions(t_previous, mirrored, smoothing)
         pos_current = self.GetPositions(t_current, mirrored, smoothing)
         return (pos_current - pos_previous) / self.Motion.DeltaTime
-
-        # timestamps = Tensor.Clamp(Tensor.Concat((timestamps[...,:1] - self.Motion.DeltaTime, timestamps), -1), 0, self.Motion.TotalTime)
-        # positions = self.GetPositions(timestamps, mirrored, smoothing)
-        # print(timestamps)
-        # prev = positions[..., :-1, :]
-        # next = positions[..., 1:, :]
-        # velocities = (next - prev) / self.Motion.DeltaTime
-        # return velocities
 
     def GetDeltaTransforms(
         self,
@@ -200,9 +201,7 @@ class RootModule(Module):
             hip_dot_up = Tensor.Unsqueeze(Tensor.Dot(hip_batch, up_batch), -1)
             hip_batch_projected = hip_batch - hip_dot_up * up_batch
             hip_batch_normalized = Tensor.Normalize(hip_batch_projected)
-            shoulder_dot_up = Tensor.Unsqueeze(
-                Tensor.Dot(shoulder_batch, up_batch), -1
-            )
+            shoulder_dot_up = Tensor.Unsqueeze(Tensor.Dot(shoulder_batch, up_batch), -1)
             shoulder_batch_projected = shoulder_batch - shoulder_dot_up * up_batch
             shoulder_batch_normalized = Tensor.Normalize(shoulder_batch_projected)
 

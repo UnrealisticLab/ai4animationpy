@@ -159,9 +159,7 @@ class BatchConverter:
                 for file in files
             }
 
-            with tqdm(
-                total=len(files), unit="file", desc="[Converting files]"
-            ) as pbar:
+            with tqdm(total=len(files), unit="file", desc="[Converting files]") as pbar:
                 for future in as_completed(tasks):
                     filename, output_path, success, error_msg = future.result()
                     if success:
@@ -279,10 +277,13 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Batch convert GLB, FBX, and BVH files to NPZ motion data", prog="convert"
+        description="Batch convert GLB, FBX, and BVH files to NPZ motion data",
+        prog="convert",
     )
     parser.add_argument(
-        "--input_dir", required=True, help="Input directory containing GLB/FBX/BVH files"
+        "--input_dir",
+        required=True,
+        help="Input directory containing GLB/FBX/BVH files",
     )
     parser.add_argument(
         "--output_dir", help="Output directory for NPZ files (default: input_dir/NPZ)"
@@ -291,7 +292,7 @@ def main():
         "--skeleton",
         choices=["Cranberry", "Geno", "Quadruped"],
         required=False,
-        help="Skeleton definition to use for bone filtering (default: Cranberry)"
+        help="Skeleton definition to use for bone filtering (default: Cranberry)",
     )
 
     parser.add_argument(
@@ -299,13 +300,13 @@ def main():
         type=float,
         default=0.01,
         required=False,
-        help="Scale factor for BVH position data (e.g. 0.01 for centimeters)"
+        help="Scale factor for BVH position data (e.g. 0.01 for centimeters)",
     )
     parser.add_argument(
         "--bvh_mirror_axis",
         choices=[axis.name for axis in Vector3.Axis],
         required=False,
-        help="Optional mirror axis for BVH import handedness correction."
+        help="Optional mirror axis for BVH import handedness correction.",
     )
 
     args = parser.parse_args()

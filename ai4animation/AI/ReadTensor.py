@@ -33,11 +33,15 @@ class ReadTensor:
         else:
             return list(self.Fixed) + list(shape)
 
-    def Read(self, shape):
+    def Read(self, shape, min=None, max=None):
         size = Tensor.ShapeCapacity(shape)
         if not self.Verify(size):
             return
         values = self.Data[..., self.Pivot : self.Pivot + size]
+        if min is not None:
+            values = Tensor.Maximum(values, min)
+        if max is not None:
+            values = Tensor.Minimum(values, max)
         self.Pivot += size
         return values.reshape(self.DetermineShape(shape))
 

@@ -18,19 +18,10 @@ class Motion:
                 f"Warning: Number of joints in frames ({self.NumJoints}) doesn't match hierarchy ({len(hierarchy.BoneNames)})"
             )
 
-        self.MirrorAxis = Vector3.Axis.ZPositive
-        self.Symmetry = Utility.SymmetryIndices(hierarchy.BoneNames)
-
-        self.Correction = Rotation.Euler(Vector3.Zero(len(hierarchy.BoneNames)))
-        for i, sym_idx in enumerate(self.Symmetry):
-            self.Correction[i : i + 1] = (
-                Rotation.Euler(0, 0, 180) if sym_idx != i else Rotation.Euler(0, 0, 0)
-            )
-        self.NeedsCorrection: bool = not Tensor.All(
-            self.Correction == Rotation.Euler(0, 0, 0)
-        )
+        self.Scale = 1.0
 
         self.Modules = []
+        self.MirrorModule = None
 
     @property
     def NumFrames(self) -> int:
@@ -48,8 +39,11 @@ class Motion:
     def TotalTime(self) -> float:
         return (self.NumFrames - 1) / self.Framerate
 
-    def AddModule(self, module):
-        self.Modules.append(module(self))
+    def AddModules(self, modules):
+        for module in modules:
+            self.Modules.append(module(self))
+        for module in self.Modules:
+            module.Initialize()
 
     def GetModule(self, module):
         for instance in self.Modules:
@@ -73,7 +67,9 @@ class Motion:
                 f"Warning: Total time ({self.TotalTime:.2f}s) is less than or equal to end padding ({end_padding:.2f}s). No timestamps will be generated."
             )
             return Tensor.Zeros(0)
-        return Tensor.Arange(start_padding, self.TotalTime - end_padding, 1.0 / framerate)
+        return Tensor.Arange(
+            start_padding, self.TotalTime - end_padding, 1.0 / framerate
+        )
 
     def GetBoneIndices(self, names_or_indices=None):
         if names_or_indices is None:
@@ -87,29 +83,35 @@ class Motion:
     def GetBoneTransformations(
         self, timestamps=None, bone_names_or_indices=None, mirrored=False
     ):
-        frame_indices = self.GetFrameIndices(timestamps)
-        bone_indices = self.GetBoneIndices(bone_names_or_indices)
-
         # This fails if only one (float) timestamp is given because only one (int) frame_indices is returned. The rest of the function works tho. Expected?
         # if len(frame_indices) == 0 or len(bone_indices) == 0:
         #     print("Failed sampling bone transformations because frame indices or bone specifications were invalid")
         #     return None
 
         if mirrored:
-            bone_indices = [self.Symmetry[idx] for idx in bone_indices]
+            if self.MirrorModule is None:
+                from ai4animation.Animation.MirrorModule import MirrorModule
 
-        frames = self.Frames[frame_indices.flatten()]
+                self.MirrorModule = self.GetModule(MirrorModule)
+                if self.MirrorModule is None:
+                    print("Warning: Mirror module not found. Skipping mirroring.")
+                    return self.GetBoneTransformations(
+                        timestamps, bone_names_or_indices, False
+                    )
+
+        frame_indices = self.GetFrameIndices(timestamps)
+        bone_indices = self.GetBoneIndices(bone_names_or_indices)
 
         transformations = (
-            frames[:, bone_indices]
+            self.Frames[frame_indices.flatten()][:, bone_indices]
             if not mirrored
-            else Transform.GetMirror(frames[:, bone_indices], self.MirrorAxis)
+            else self.MirrorModule.GetBoneTransformations(
+                frame_indices.flatten(), bone_indices
+            )
         )
-        if mirrored and self.NeedsCorrection:
-            local_update = Transform.TR(
-                Vector3.Zero(len(bone_indices)), self.Correction[bone_indices]
-            ).reshape(1, len(bone_indices), 4, 4)
-            transformations = Transform.Multiply(transformations, local_update)
+
+        if self.Scale != 1.0:
+            transformations = Transform.Scale(transformations, self.Scale)
 
         transformations = transformations.reshape(
             frame_indices.shape + transformations.shape[1:]
@@ -161,6 +163,31 @@ class Motion:
                 - self.GetBonePositions(timestamp - self.DeltaTime, bone, mirrored)
             ) / self.DeltaTime
 
+    def GetBoneLengths(
+        self,
+        timestamps=None,
+        bone_names_or_indices=None,
+        parent_names_or_indices=None,
+        mirrored=False,
+    ):
+        if timestamps is None:
+            timestamps = Tensor.LinSpace(0, self.TotalTime, self.NumFrames)
+
+        if bone_names_or_indices is None:
+            bone_names_or_indices = self.Hierarchy.BoneNames
+
+        if parent_names_or_indices is None:
+            parent_names_or_indices = self.Hierarchy.ParentNames
+
+        bone_indices = self.GetBoneIndices(bone_names_or_indices)
+        parent_indices = self.GetBoneIndices(parent_names_or_indices)
+        bone_indices.remove(0)
+        parent_indices.remove(-1)
+        bone_positions = self.GetBonePositions(timestamps, bone_indices, mirrored)
+        parent_positions = self.GetBonePositions(timestamps, parent_indices, mirrored)
+        bone_lengths = Vector3.Distance(bone_positions, parent_positions)
+        return bone_lengths
+
     def GetAveragedBoneLengths(
         self,
         timestamps=None,
@@ -170,6 +197,12 @@ class Motion:
     ):
         if timestamps is None:
             timestamps = Tensor.LinSpace(0, self.TotalTime, self.NumFrames)
+
+        if bone_names_or_indices is None:
+            bone_names_or_indices = self.Hierarchy.BoneNames
+
+        if parent_names_or_indices is None:
+            parent_names_or_indices = self.Hierarchy.ParentNames
 
         frame_indices = self.GetFrameIndices(timestamps)
         bone_indices = self.GetBoneIndices(bone_names_or_indices)

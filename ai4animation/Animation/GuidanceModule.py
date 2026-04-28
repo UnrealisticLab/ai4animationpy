@@ -15,13 +15,11 @@ class GuidanceModule(Module):
         super().__init__(motion)
         self.RootModule = None
 
+    def Initialize(self):
+        self.RootModule = self.Motion.GetModule(RootModule)
+
     def GetName(self):
         return "Guidance"
-
-    def GetRootModule(self):
-        if self.RootModule is None:
-            self.RootModule = self.Motion.GetModule(RootModule)
-        return self.RootModule
 
     def CreateGuidance(self, id, timestamp, mirrored, names, smoothing):
         return self.Guidance(
@@ -30,7 +28,7 @@ class GuidanceModule(Module):
 
     def GetGuidancePositions(self, timestamps, mirrored, names, smoothing):
         timestamps = Tensor.Unsqueeze(timestamps, -1) + smoothing.Timestamps
-        roots = self.GetRootModule().GetTransforms(timestamps, mirrored)
+        roots = self.RootModule.GetTransforms(timestamps, mirrored)
         positions = self.Motion.GetBonePositions(timestamps, names, mirrored)
         positions = Vector3.PositionTo(positions, Tensor.Unsqueeze(roots, -3))
         positions = Tensor.Squeeze(Tensor.Mean(positions, axis=-3), -3)

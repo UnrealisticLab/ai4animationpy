@@ -110,6 +110,14 @@ def GetRotation(tensor, index=None):
         return tensor[index, :3, :3]
 
 
+def Scale(tensor, scale, index=None):
+    if index is None:
+        tensor[..., :3, 3] *= scale
+    else:
+        tensor[index, :3, 3] *= scale
+    return tensor
+
+
 def GetAxisX(tensor, index=None):
     if index is None:
         return tensor[..., :3, 0]

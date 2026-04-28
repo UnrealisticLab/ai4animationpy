@@ -9,6 +9,8 @@ import sys
 
 import numpy as np
 import torch
+from ai4animation.AI.Optimizers.AdamWR.AdamW import AdamW
+from ai4animation.AI.Optimizers.AdamWR.CyclicScheduler import CyclicScheduler
 
 
 def ToBytes(value):
@@ -47,60 +49,17 @@ def Clamp(value, min, max):
     return value
 
 
-def SmoothStep(x, threshold, power):
-    x = np.clip(x, 0, 1)
-    t = np.clip((x - threshold) / (1 - threshold), 0, 1)
-    smoothed = 3 * t**2 - 2 * t**3
-    return np.power(smoothed, power)
-
-
 def ClampArray(values, min, max):
     for i in range(len(values)):
         values[i] = Clamp(values[i], min, max)
     return values
 
 
-def SymmetryIndices(joint_names):
-    def TryAssign(value: str, bone: int):
-        if value in name_to_idx:
-            symmetry[bone] = name_to_idx[value]
-            return True
-        else:
-            return False
-
-    name_to_idx = {name: i for i, name in enumerate(joint_names)}
-    symmetry = list(range(len(joint_names)))
-    for i, boneName in enumerate(joint_names):
-        if boneName is None:
-            continue
-        if "_l_" in boneName:
-            if TryAssign(boneName.replace("_l_", "_r_"), i):
-                continue
-
-        if "_r_" in boneName:
-            if TryAssign(boneName.replace("_r_", "_l_"), i):
-                continue
-
-        if "_left_" in boneName:
-            if TryAssign(boneName.replace("_left_", "_right_"), i):
-                continue
-
-        if "_right_" in boneName:
-            if TryAssign(boneName.replace("_right_", "_left_"), i):
-                continue
-
-        if "Left" in boneName:
-            if TryAssign(boneName.replace("Left", "Right"), i):
-                continue
-
-        if "Right" in boneName:
-            if TryAssign(boneName.replace("Right", "Left"), i):
-                continue
-
-        symmetry[i] = i
-    # for i, boneName in enumerate(joint_names):
-    #    print(boneName, name_to_idx[boneName], joint_names[symmetry[i]])
-    return symmetry
+def SmoothStep(x, threshold, power):
+    x = np.clip(x, 0, 1)
+    t = np.clip((x - threshold) / (1 - threshold), 0, 1)
+    smoothed = 3 * t**2 - 2 * t**3
+    return np.power(smoothed, power)
 
 
 def gensym(length=32, prefix="gensym_"):
@@ -114,6 +73,14 @@ def gensym(length=32, prefix="gensym_"):
     symbol = "".join([secrets.choice(alphabet) for i in range(length)])
 
     return prefix + symbol
+
+
+def SetSeed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
 
 
 def LoadModule(source, module_name=None):
@@ -145,12 +112,9 @@ def GetDirectory(file):
     return str(pathlib.Path(file).parent)
 
 
-def SetSeed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True
+def SaveModel(model, path):
+    MakeDirectory(GetDirectory(path))
+    torch.save(model, path)
 
 
 def SaveONNX(
@@ -192,6 +156,41 @@ def SaveONNX(
 
 def GetNumWorkers():
     return os.cpu_count() // 4
+
+
+class CosineAnnealingOptimizer:
+    def __init__(
+        self,
+        params,
+        batch_size,
+        sample_count,
+        lr=1e-4,
+        decay=1e-4,
+        restart_period=10,
+        t_mult=2,
+    ):
+        self.Optimizer = AdamW(params, lr=lr, weight_decay=decay)
+        self.Scheduler = CyclicScheduler(
+            optimizer=self.Optimizer,
+            batch_size=batch_size,
+            epoch_size=sample_count,
+            restart_period=restart_period,
+            t_mult=t_mult,
+            policy="cosine",
+            verbose=True,
+        )
+        self.Step = 0
+        self.Total = sample_count
+
+    def Update(self, count, loss):
+        self.Optimizer.zero_grad()
+        loss.backward()
+        self.Optimizer.step()
+        self.Scheduler.batch_step()
+        self.Step += count
+        if self.Step == self.Total:
+            self.Scheduler.step()
+            self.Step = 0
 
 
 # @staticmethod

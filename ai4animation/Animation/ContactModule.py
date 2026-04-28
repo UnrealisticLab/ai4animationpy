@@ -3,13 +3,12 @@ from ai4animation import Utility
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Animation.Module import Module
 from ai4animation.Animation.Motion import Motion
-from ai4animation.Animation.TimeSeries import TimeSeries
 from ai4animation.Math import Tensor
 
 
 class ContactModule(Module):
     def __init__(
-        self, motion: Motion, configs
+        self, motion: Motion, configs, proportional=False
     ) -> (
         None
     ):  # Each config is a tuple of (boneName, heightThreshold, velocityThreshold)
@@ -20,6 +19,10 @@ class ContactModule(Module):
         self.BoneIndices = self.Motion.GetBoneIndices(self.BoneNames)
         self.HeightThresholds = [config[1] for config in configs]
         self.VelocityThresholds = [config[2] for config in configs]
+        self.Proportional = proportional
+
+    def Initialize(self):
+        pass
 
     def GetName(self):
         return "Contact"
@@ -51,9 +54,19 @@ class ContactModule(Module):
         velocities = self.Motion.GetBoneVelocities(
             timestamps, self.BoneIndices, mirrored
         )
-        heightCriterion = positions[..., 1] < self.HeightThresholds
-        velocityCriterion = (
-            Tensor.Norm(velocities, keepDim=False) < self.VelocityThresholds
-        )
+        heights = positions[..., 1]
+        velocities = Tensor.Norm(velocities, keepDim=False)
+
+        if self.Proportional:
+            lengths = self.Motion.GetBoneLengths(
+                timestamps=timestamps, mirrored=mirrored
+            )
+            scales = Tensor.Sum(lengths, axis=-2, keepDim=False)
+        else:
+            scales = 1
+
+        heightCriterion = heights < (self.HeightThresholds * scales)
+        velocityCriterion = velocities < (self.VelocityThresholds * scales)
+
         contacts = heightCriterion & velocityCriterion
         return contacts

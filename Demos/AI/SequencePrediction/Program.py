@@ -5,15 +5,14 @@ from pathlib import Path
 
 import torch
 from ai4animation import (
-    AdamW,
     AI4Animation,
-    CyclicScheduler,
     DataSampler,
     Dataset,
     FeedTensor,
-    MLP,
+    MirrorModule,
     MotionEditor,
     MotionModule,
+    MultiLayerPerceptron,
     Plotting,
     ReadTensor,
     RootModule,
@@ -30,12 +29,14 @@ ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Cranberry")
 sys.path.append(ASSETS_PATH)
 import Definitions
 
-BONES = Definitions.FULL_BODY_NAMES
-FRAMERATE = 30
+EPOCH_COUNT = 150
 BATCH_SIZE = 32
+FRAMERATE = 30
+DRAW_INTERVAL = 500
+BONES = Definitions.FULL_BODY_NAMES
 FUTURE_SAMPLES = 6
 INPUT_DIM = 12 * len(BONES)
-OUTPUT_DIM = FUTURE_SAMPLES*4 + FUTURE_SAMPLES * len(BONES) * 9
+OUTPUT_DIM = FUTURE_SAMPLES * 4 + FUTURE_SAMPLES * len(BONES) * 9
 
 
 class Program:
@@ -55,6 +56,9 @@ class Program:
                     Definitions.NeckName,
                 ),
                 lambda x: MotionModule(x),
+                lambda x: MirrorModule(
+                    x, Vector3.Axis.ZPositive, Vector3.Create(0, 0, 180)
+                ),
             ],
         )
 
@@ -65,29 +69,25 @@ class Program:
             function=self.GetTrainingFeatures,
         )
 
-        self.EpochCount = 150
-        self.DrawInterval = 500
         self.Network = Tensor.ToDevice(
-            MLP.Model(
-                input_dim=INPUT_DIM, output_dim=OUTPUT_DIM, hidden_dim=512, dropout=0.1
+            MultiLayerPerceptron.Model(
+                input_dim=INPUT_DIM, output_dim=OUTPUT_DIM, hidden_dim=1024
             )
         )
-        self.Optimizer = AdamW(self.Network.parameters(), lr=1e-4, weight_decay=1e-4)
-        self.Scheduler = CyclicScheduler(
-            optimizer=self.Optimizer,
-            batch_size=self.DataSampler.BatchSize,
-            epoch_size=self.DataSampler.SampleCount,
-            restart_period=10,
-            t_mult=2,
-            policy="cosine",
-            verbose=True,
+
+        self.Optimizer = Utility.CosineAnnealingOptimizer(
+            self.Network.parameters(),
+            self.DataSampler.BatchSize,
+            self.DataSampler.SampleCount,
         )
+
         self.LossHistory = Plotting.LossHistory(
-            "Loss History", drawInterval=self.DrawInterval, yScale="log"
+            "Loss History", drawInterval=DRAW_INTERVAL, yScale="log"
         )
 
         self.FutureSeries = TimeSeries(start=0.0, end=0.5, samples=FUTURE_SAMPLES)
 
+        self.Paused = False
         self.Trainer = self.Training()
 
     def Standalone(self):
@@ -98,27 +98,29 @@ class Program:
             BONES,
         )
         AI4Animation.Standalone.Camera.SetTarget(self.Editor.Actor.Entity)
+        self.PauseButton = AI4Animation.GUI.Button(
+            "Pause Training", 0.4, 0.90, 0.2, 0.04, False, True
+        )
 
     def Update(self):
+        if self.Paused:
+            return
         try:
             next(self.Trainer)
-        except StopIteration as e:
+        except StopIteration:
             pass
 
     def Training(self):
-        for epoch in range(1, self.EpochCount + 1):
+        for epoch in range(1, EPOCH_COUNT + 1):
+            print("Epoch", epoch)
             for xBatch, yBatch in self.DataSampler.SampleBatchesWithinMotions(
-                epoch, self.EpochCount
+                epoch, EPOCH_COUNT
             ):
-                _, losses = self.Network.learn(xBatch, yBatch, epoch == 1)
-                self.Optimizer.zero_grad()
-                sum(losses.values()).backward()
-                self.Optimizer.step()
-                self.Scheduler.batch_step()
-                for k, v in losses.items():
+                _, loss = self.Network.learn(xBatch, yBatch, epoch == 1)
+                self.Optimizer.Update(yBatch.shape[0], loss["MSE Loss"])
+                for k, v in loss.items():
                     self.LossHistory.Add((Plotting.ToNumpy(v), k))
                 yield
-            self.Scheduler.step()
             self.LossHistory.Print()
 
     def GetTrainingFeatures(self, batch):
@@ -198,7 +200,8 @@ class Program:
                 Transform.TR(
                     output.ReadVector3(FUTURE_SAMPLES, True, False, True),
                     Rotation.Look(
-                        output.ReadVector3(FUTURE_SAMPLES, True, False, True), Vector3.UnitY(6)
+                        output.ReadVector3(FUTURE_SAMPLES, True, False, True),
+                        Vector3.UnitY(6),
                     ),
                 ),
                 root,
@@ -209,16 +212,19 @@ class Program:
             # Motion
             futureMotion = Transform.TransformationFrom(
                 Transform.TR(
-                    output.ReadVector3((FUTURE_SAMPLES, len(BONES))), output.ReadRotation3D((FUTURE_SAMPLES, len(BONES)))
+                    output.ReadVector3((FUTURE_SAMPLES, len(BONES))),
+                    output.ReadRotation3D((FUTURE_SAMPLES, len(BONES))),
                 ),
                 root,
             )
-            motionSeries = MotionModule.Series(
-                self.FutureSeries, BONES, futureMotion
-            )
+            motionSeries = MotionModule.Series(self.FutureSeries, BONES, futureMotion)
             motionSeries.Draw()
 
         self.Network.train()
+
+    def GUI(self):
+        self.PauseButton.GUI()
+        self.Paused = self.PauseButton.Active
 
 
 def main():

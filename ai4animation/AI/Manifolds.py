@@ -46,6 +46,7 @@ def quantize(z, levels):
 def gumbel_sample(logits, noise, temperature, eps=1e-10):
     U = torch.rand_like(logits) if noise is None else noise
     N = -torch.log(-torch.log(U + eps) + eps)
+    N = N.reshape(logits.shape)
     y = logits + N
     return F.softmax(y / temperature, dim=-1)
 
@@ -58,7 +59,6 @@ def gumbel(logits, dim, noise=None, temperature=1.0, hard=False):
     """
     shape = logits.shape
     logits = logits.reshape(logits.shape[0], -1, dim)
-    noise = noise if noise is None else noise.reshape(-1, dim)
 
     y = gumbel_sample(logits, noise, temperature)
 
@@ -75,15 +75,9 @@ def gumbel(logits, dim, noise=None, temperature=1.0, hard=False):
     return y_hard.reshape(shape)
 
 
-def gumbel_soft(z, dim):
+def gumbel_softmax(z, dim, hard=False, tau=1.0):
     return F.gumbel_softmax(
-        z.reshape(-1, dim), tau=1, hard=False, eps=1e-10, dim=-1
-    ).reshape(z.shape)
-
-
-def gumbel_hard(z, dim):
-    return F.gumbel_softmax(
-        z.reshape(-1, dim), tau=1, hard=True, eps=1e-10, dim=-1
+        z.reshape(-1, dim), tau=tau, hard=hard, eps=1e-10, dim=-1
     ).reshape(z.shape)
 
 

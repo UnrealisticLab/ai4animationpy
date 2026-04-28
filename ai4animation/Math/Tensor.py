@@ -342,6 +342,13 @@ def Max(tensor, axis=-1, keepDim=True, backend=DefaultBackend):
         return torch.max(tensor, axis, keepDim)
 
 
+def Minimum(a, b, backend=DefaultBackend):
+    if backend == Backend.NumPy:
+        return np.minimum(a, b)
+    if backend == Backend.PyTorch:
+        return torch.minimum(a, b)
+
+
 def Maximum(a, b, backend=DefaultBackend):
     if backend == Backend.NumPy:
         return np.maximum(a, b)
@@ -422,9 +429,10 @@ def Gaussian(
         # power = power.reshape(-1, *(1,)*(weight.ndim-1)) #expand dimensions with ones to match the dimensions of 'weight'
     weight = Pow(weight, power)
     values *= weight
-    weight_sum = Sum(weight, -1, keepDim=True)
-    weight_sum = Maximum(weight_sum, 1e-6, backend=backend)  # Prevent division by zero
-    values = Sum(values, -1, keepDim=True) / weight_sum
+    # check the maximum thing here again
+    values = Sum(values, -1, keepDim=True) / Maximum(
+        Sum(weight, -1, keepDim=True), 1e-5
+    )
 
     values = SwapAxes(values, axis, -1)
 

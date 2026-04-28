@@ -65,6 +65,7 @@ class MotionEditor(Component):
                 timestamp, actor.GetBoneNames(), mirrored=mirrored
             )
         )
+        actor.Entity.SetScale(self.Motion.Scale)
 
     def LoadPreviousMotion(self):
         index = self.Dataset.GetMotionIndex(self.Motion)
@@ -79,7 +80,7 @@ class MotionEditor(Component):
             "Motion Editor", 0.25, 0.01, 0.5, 0.15, scale_width=True, scale_height=False
         )
         self.Slider_Assets = AI4Animation.GUI.Slider(
-            0.15, 0.035, 0.7, 0.025, 0.0, 0.0, 1.0, self.Canvas
+            0.15, 0.035, 0.7, 0.025, 0.0, 0.0, 1.0, canvas=self.Canvas
         )
         self.Button_Prev_Motion = AI4Animation.GUI.Button(
             "<<", 0.01, 0.035, 0.06, 0.025, False, False, self.Canvas
@@ -101,7 +102,10 @@ class MotionEditor(Component):
             color_active=AI4Animation.Color.RED,
         )
         self.Slider_Timeline = AI4Animation.GUI.Slider(
-            0.15, 0.065, 0.7, 0.04, 0.0, 0.0, 1.0, self.Canvas
+            0.15, 0.065, 0.7, 0.04, 0.0, 0.0, 1.0, canvas=self.Canvas
+        )
+        self.Slider_Scale = AI4Animation.GUI.Slider(
+            0.85, 0.155, 0.14, 0.03, 1.0, 0.5, 1.5, canvas=self.Canvas, label="Scale"
         )
         self.Dropdown_Modules = AI4Animation.GUI.Dropdown(
             "Modules",
@@ -185,6 +189,13 @@ class MotionEditor(Component):
             self.Timestamp = self.Slider_Timeline.GetValue() * self.Motion.TotalTime
         else:
             self.Slider_Timeline.SetValue(self.Timestamp / self.Motion.TotalTime)
+
+        self.Motion.Scale = self.Slider_Scale.GUI(self.Motion.Scale)
+        # if self.Slider_Scale.Modified:
+        #     self.Motion.Scale = self.Slider_Scale.GetValue()
+        # else:
+        #     self.Slider_Scale.SetValue(self.Motion.Scale)
+        # self.Slider_Scale.Label = str(round(self.Motion.Scale, 3))
 
         AI4Animation.Draw.Text(
             f"{self.Motion.GetFrameIndices(self.Timestamp)[0] + 1}/{self.Motion.NumFrames}",

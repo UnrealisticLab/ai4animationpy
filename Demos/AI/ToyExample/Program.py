@@ -1,7 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 import numpy as np
 import torch
-from ai4animation import AdamW, AI4Animation, CyclicScheduler, MLP, Plotting, Tensor
+from ai4animation import AI4Animation, MultiLayerPerceptron, Plotting, Tensor, Utility
 
 
 class Program:
@@ -12,17 +12,13 @@ class Program:
         self.SampleCount = self.BatchSize * self.BatchCount
         self.DrawInterval = 500
         self.Network = Tensor.ToDevice(
-            MLP.Model(input_dim=1, output_dim=100, hidden_dim=128, dropout=0.1)
+            MultiLayerPerceptron.Model(input_dim=1, output_dim=100, hidden_dim=128)
         )
-        self.Optimizer = AdamW(self.Network.parameters(), lr=1e-4, weight_decay=1e-4)
-        self.Scheduler = CyclicScheduler(
-            optimizer=self.Optimizer,
-            batch_size=self.BatchSize,
-            epoch_size=self.SampleCount,
-            restart_period=10,
-            t_mult=2,
-            policy="cosine",
-            verbose=True,
+
+        self.Optimizer = Utility.CosineAnnealingOptimizer(
+            self.Network.parameters(),
+            self.BatchSize,
+            self.SampleCount,
         )
         self.LossHistory = Plotting.LossHistory(
             "Loss History", drawInterval=self.DrawInterval, yScale="log"
@@ -43,19 +39,11 @@ class Program:
                 y = self.GetOutput(x)
                 xBatch = Tensor.ToDevice(torch.tensor(x, dtype=torch.float32))
                 yBatch = Tensor.ToDevice(torch.tensor(y, dtype=torch.float32))
-
-                _, losses = self.Network.learn(xBatch, yBatch, e == 1)
-                self.Optimizer.zero_grad()
-                sum(losses.values()).backward()
-                self.Optimizer.step()
-                self.Scheduler.batch_step()
-
-                for k, v in losses.items():
+                _, loss = self.Network.learn(xBatch, yBatch, e == 1)
+                self.Optimizer.Update(yBatch.shape[0], loss["MSE Loss"])
+                for k, v in loss.items():
                     self.LossHistory.Add((Plotting.ToNumpy(v), k))
-
                 yield
-
-            self.Scheduler.step()
             self.LossHistory.Print()
 
     def GetInput(self):

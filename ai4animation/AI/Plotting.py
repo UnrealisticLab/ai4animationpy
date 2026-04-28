@@ -80,7 +80,7 @@ class LossHistory:
         ax=None,
         min=None,
         max=None,
-        maxHistory=0,
+        maxHistory=1000,
         cumulativeHorizon=100,
         drawInterval=100,
         drawWait=1e-3,

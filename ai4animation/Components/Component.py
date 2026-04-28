@@ -1,14 +1,14 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 from abc import ABC, abstractmethod
 
-from ai4animation import AI4Animation
+from ai4animation import *
 
 
 class Component(ABC):
     def __init__(self, entity, params):
         self.Entity = entity
         self.Start(params)
-        if AI4Animation.AI4Animation.Standalone is not None:
+        if AI4Animation.Standalone is not None:
             self.Standalone()
 
     def Start(self, params):

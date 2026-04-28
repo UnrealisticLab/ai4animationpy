@@ -45,6 +45,11 @@ class AssetManager:
             AssetManager.GetPath("Assets/v3.glb")
             AssetManager.GetPath("C:/absolute/path/model.glb")
         """
+
+        # Handle list of paths
+        if isinstance(relative_path, list):
+            return [cls.GetPath(p) for p in relative_path]
+
         # If already absolute path, return it
         if os.path.isabs(relative_path):
             return relative_path
@@ -89,3 +94,12 @@ class AssetManager:
 
 
 AssetManager.SetRoot(Path(__file__).resolve().parent.parent / "Assets")
+
+
+def __getattr__(name):
+    """Delegate module-level attribute access to the AssetManager class.
+
+    This ensures ai4animation.AssetManager.GetPath(...) works whether
+    AssetManager resolves to the module or the class.
+    """
+    return getattr(AssetManager, name)

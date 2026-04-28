@@ -17,6 +17,9 @@ class Module(ABC):
         except:
             pass
 
+    def Initialize(self):
+        pass
+
     def GetName(self):
         return __name__
 

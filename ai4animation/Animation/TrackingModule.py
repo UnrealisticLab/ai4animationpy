@@ -44,6 +44,9 @@ class TrackingModule(Module):
     def RightWristIndex(self):
         return self.TrackerIndices[2]
 
+    def Initialize(self):
+        pass
+
     def GetName(self):
         return "Tracking"
 

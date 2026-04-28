@@ -1,5 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 import builtins
+
 import numpy as np
 import raylib as rl
 from ai4animation import Time, Utility
@@ -76,29 +77,36 @@ class Canvas:
 
 
 class Slider:
-    def __init__(self, x, y, w, h, value, min, max, canvas=None, label=None):
+    def __init__(
+        self, x, y, w, h, value, min, max, integers=False, canvas=None, label=None
+    ):
         self.Rectangle = Rectangle(x, y, w, h)
         self.Value = rl.ffi.new("float *", value)
         self.Min = min
         self.Max = max
+        self.Integers = integers
         self.Canvas = canvas
         self.PrevValue = self.GetValue()
         self.Modified = False
         self.Label = label
 
-    def GUI(self):
+    def GUI(self, value=None):
         rectangle = (
             self.Canvas.ToCanvas(self.Rectangle) if self.Canvas else self.Rectangle
         )
         rl.GuiSliderBar(
             rectangle.Screen().Tuple(), b"", b"", self.Value, self.Min, self.Max
         )
-        value = self.GetValue()
-        self.Modified = round(value, PRECISION) != round(self.PrevValue, PRECISION)
-        self.PrevValue = value
+        self.Modified = round(self.GetValue(), PRECISION) != round(
+            self.PrevValue, PRECISION
+        )
+        self.PrevValue = self.GetValue()
+        if value is not None and not self.Modified:
+            self.SetValue(value)
+
         if self.Label is not None:
             AI4Animation.Draw.Text(
-                self.Label,
+                self.Label + ": " + str(round(self.GetValue(), PRECISION)),
                 rectangle.x + rectangle.width / 2.0,
                 rectangle.y + rectangle.height / 4.0,
                 size=rectangle.height / 2.0,
@@ -106,33 +114,15 @@ class Slider:
                 pivot=0.5,
             )
 
+        return self.GetValue()
+
     def SetValue(self, value):
+        value = int(round(value)) if self.Integers else value
         self.Value[0] = value
         self.PrevValue = value
 
     def GetValue(self):
-        return self.Value[0]
-
-
-class SliderWithLabel:
-    def __init__(self, label, x, y, w, h, value, min, max, canvas=None):
-        self.Label = label
-        self.Rectangle = Rectangle(x, y, w, h)
-        self.Value = rl.ffi.new("float *", value)
-        self.Min = min
-        self.Max = max
-        self.Separation = 0.25
-        self.Canvas = canvas
-
-    def GUI(self):
-        rectangle = (
-            self.Canvas.ToCanvas(self.Rectangle) if self.Canvas else self.Rectangle
-        )
-        rl.GuiSliderBar(
-            rectangle.Screen().Tuple(), b"", b"", self.Value, self.Min, self.Max
-        )
-        rect = self.GetLabelRectangle()
-        AI4Animation.Draw.Text(self.Label, rect.x, rect.y, rect.height * 0.75)
+        return int(round(self.Value[0])) if self.Integers else self.Value[0]
 
 
 class Dropdown:
@@ -500,57 +490,6 @@ class Rectangle:
         return Rectangle(self.x, self.y, self.width, self.height)
 
 
-def BarPlot(x, y, w, h, values, label=None, min=None, max=None):
-    if len(values.shape) > 3:
-        print(
-            "Drawing bar plot for tensors with more than 2 dimensions is not supported."
-        )
-        return
-    rectangle = Rectangle(x, y, w, h)
-    screenRectangle = rectangle.Screen()
-    rl.DrawRectangleRec(
-        screenRectangle.Tuple(), Utility.Opacity(AI4Animation.Color.WHITE, 0.5)
-    )
-    rows = values.shape[0]
-    cols = values.shape[1]
-
-    bar_width = w / cols
-    bar_height = h / rows
-    for row in range(rows):
-        for col in range(cols):
-            value = values[row, col]
-            if min is not None and max is not None:
-                value = min if value < min else value
-                value = max if value > max else value
-                value = Utility.Normalize(value, min, max, 0.0, 1.0)
-            ratio = bar_height * value
-            bar_x = ScreenWidth() * (
-                (x + w - bar_width)
-                if cols == 1
-                else Utility.Normalize(col, 0, cols - 1, x, x + w - bar_width)
-            )
-            bar_y = ScreenHeight() * (
-                (y + h - ratio)
-                if rows == 1
-                else Utility.Normalize(
-                    row, 0, rows - 1, y + bar_height - ratio, y + h - ratio
-                )
-            )
-            bar_w = ScreenWidth() * bar_width
-            bar_h = ScreenHeight() * ratio
-            rl.DrawRectangleRec((bar_x, bar_y, bar_w, bar_h), AI4Animation.Color.BLACK)
-    rl.DrawRectangleLinesEx(screenRectangle.Tuple(), 2.0, AI4Animation.Color.BLACK)
-    if label is not None:
-        AI4Animation.Draw.Text(
-            label,
-            x + w / 2.0,
-            y + h / 4.0,
-            size=h / 2.0,
-            color=AI4Animation.Color.BLACK,
-            pivot=0.5,
-        )
-
-
 def CurvePlot(
     x,
     y,
@@ -616,7 +555,9 @@ def CurvePlot(
     if curveLabels is not None:
         legend_count = len(curveLabels)
 
-    legend_height = 0.0 if legend_count == 0 else legend_font_size / ScreenHeight() + 0.016
+    legend_height = (
+        0.0 if legend_count == 0 else legend_font_size / ScreenHeight() + 0.016
+    )
     top_padding = 0.025 * h + label_height + legend_height
     left_padding = 0.03 * w
     right_padding = 0.02 * w
@@ -648,17 +589,27 @@ def CurvePlot(
             next_value = min if min is not None and next_value < min else next_value
             next_value = max if max is not None and next_value > max else next_value
 
-            x1 = ScreenWidth() * Utility.Normalize(col - 1, 0, cols - 1, plot_left, plot_right)
-            x2 = ScreenWidth() * Utility.Normalize(col, 0, cols - 1, plot_left, plot_right)
-            y1 = ScreenHeight() * Utility.Normalize(prev_value, values_min, values_max, plot_bottom, plot_top)
-            y2 = ScreenHeight() * Utility.Normalize(next_value, values_min, values_max, plot_bottom, plot_top)
+            x1 = ScreenWidth() * Utility.Normalize(
+                col - 1, 0, cols - 1, plot_left, plot_right
+            )
+            x2 = ScreenWidth() * Utility.Normalize(
+                col, 0, cols - 1, plot_left, plot_right
+            )
+            y1 = ScreenHeight() * Utility.Normalize(
+                prev_value, values_min, values_max, plot_bottom, plot_top
+            )
+            y2 = ScreenHeight() * Utility.Normalize(
+                next_value, values_min, values_max, plot_bottom, plot_top
+            )
             rl.DrawLine(int(x1), int(y1), int(x2), int(y2), color)
 
         final_value = values[row, -1]
         final_value = min if min is not None and final_value < min else final_value
         final_value = max if max is not None and final_value > max else final_value
         final_x = ScreenWidth() * plot_right
-        final_y = ScreenHeight() * Utility.Normalize(final_value, values_min, values_max, plot_bottom, plot_top)
+        final_y = ScreenHeight() * Utility.Normalize(
+            final_value, values_min, values_max, plot_bottom, plot_top
+        )
         rl.DrawCircle(int(final_x), int(final_y), 3.0, color)
 
     rl.DrawRectangleLinesEx(screenRectangle.Tuple(), 2.0, frameColor)
@@ -686,7 +637,9 @@ def CurvePlot(
             item_width = marker_size + marker_gap + text_width
             slot_left = plot_left + idx * slot_width
             item_x = slot_left + (slot_width - item_width) / 2.0
-            marker = Rectangle(item_x, legend_row_y + 0.002, marker_size, marker_size).Screen()
+            marker = Rectangle(
+                item_x, legend_row_y + 0.002, marker_size, marker_size
+            ).Screen()
             rl.DrawRectangleRec(marker.Tuple(), colors[idx % len(colors)])
             AI4Animation.Draw.Text(
                 curveLabel,
@@ -695,6 +648,57 @@ def CurvePlot(
                 size=h / 9.0,
                 color=AI4Animation.Color.BLACK,
             )
+
+
+def BarPlot(x, y, w, h, values, label=None, min=None, max=None):
+    if len(values.shape) > 3:
+        print(
+            "Drawing bar plot for tensors with more than 2 dimensions is not supported."
+        )
+        return
+    rectangle = Rectangle(x, y, w, h)
+    screenRectangle = rectangle.Screen()
+    rl.DrawRectangleRec(
+        screenRectangle.Tuple(), Utility.Opacity(AI4Animation.Color.WHITE, 0.5)
+    )
+    rows = values.shape[0]
+    cols = values.shape[1]
+
+    bar_width = w / cols
+    bar_height = h / rows
+    for row in range(rows):
+        for col in range(cols):
+            value = values[row, col]
+            if min is not None and max is not None:
+                value = min if value < min else value
+                value = max if value > max else value
+                value = Utility.Normalize(value, min, max, 0.0, 1.0)
+            ratio = bar_height * value
+            bar_x = ScreenWidth() * (
+                (x + w - bar_width)
+                if cols == 1
+                else Utility.Normalize(col, 0, cols - 1, x, x + w - bar_width)
+            )
+            bar_y = ScreenHeight() * (
+                (y + h - ratio)
+                if rows == 1
+                else Utility.Normalize(
+                    row, 0, rows - 1, y + bar_height - ratio, y + h - ratio
+                )
+            )
+            bar_w = ScreenWidth() * bar_width
+            bar_h = ScreenHeight() * ratio
+            rl.DrawRectangleRec((bar_x, bar_y, bar_w, bar_h), AI4Animation.Color.BLACK)
+    rl.DrawRectangleLinesEx(screenRectangle.Tuple(), 2.0, AI4Animation.Color.BLACK)
+    if label is not None:
+        AI4Animation.Draw.Text(
+            label,
+            x + w / 2.0,
+            y + h / 4.0,
+            size=h / 2.0,
+            color=AI4Animation.Color.BLACK,
+            pivot=0.5,
+        )
 
 
 def HorizontalPivot(

@@ -83,6 +83,7 @@ def IsRightStickPressed():
         CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_RIGHT_THUMB
     )
 
+
 def IsL1Pressed():
     LogErrorIfGamepadNotAvailable()
     return pr.is_gamepad_button_pressed(
@@ -95,6 +96,7 @@ def IsL1Down():
     return pr.is_gamepad_button_down(
         CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_LEFT_TRIGGER_1
     )
+
 
 def IsR1Pressed():
     LogErrorIfGamepadNotAvailable()
@@ -109,6 +111,7 @@ def IsR1Down():
         CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_RIGHT_TRIGGER_1
     )
 
+
 def IsL2Pressed():
     LogErrorIfGamepadNotAvailable()
     return pr.is_gamepad_button_pressed(
@@ -118,9 +121,13 @@ def IsL2Pressed():
 
 def IsL2Down():
     LogErrorIfGamepadNotAvailable()
-    return pr.is_gamepad_button_down(
-        CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_LEFT_TRIGGER_2
-    ) or GetLeftTrigger() > TRIGGER_PRESSED_THRESHOLD
+    return (
+        pr.is_gamepad_button_down(
+            CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_LEFT_TRIGGER_2
+        )
+        or GetLeftTrigger() > TRIGGER_PRESSED_THRESHOLD
+    )
+
 
 def IsR2Pressed():
     LogErrorIfGamepadNotAvailable()
@@ -131,9 +138,13 @@ def IsR2Pressed():
 
 def IsR2Down():
     LogErrorIfGamepadNotAvailable()
-    return pr.is_gamepad_button_down(
-        CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_RIGHT_TRIGGER_2
-    ) or GetRightTrigger() > TRIGGER_PRESSED_THRESHOLD
+    return (
+        pr.is_gamepad_button_down(
+            CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_RIGHT_TRIGGER_2
+        )
+        or GetRightTrigger() > TRIGGER_PRESSED_THRESHOLD
+    )
+
 
 def IsRightFaceRightPressed():
     LogErrorIfGamepadNotAvailable()
@@ -141,17 +152,20 @@ def IsRightFaceRightPressed():
         CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_RIGHT
     )
 
+
 def IsRightFaceDownPressed():
     LogErrorIfGamepadNotAvailable()
     return pr.is_gamepad_button_pressed(
         CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_DOWN
     )
 
+
 def IsRightFaceLeftPressed():
     LogErrorIfGamepadNotAvailable()
     return pr.is_gamepad_button_pressed(
         CONTROLLER_ID, pr.GamepadButton.GAMEPAD_BUTTON_RIGHT_FACE_LEFT
     )
+
 
 def GetCurrentKey():
     key = rl.GetCharPressed()

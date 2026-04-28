@@ -1,11 +1,12 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-import numpy as np
 from typing import List
 
+import numpy as np
 from ai4animation import Utility
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Components.Component import Component
 from ai4animation.Math import Quaternion, Rotation, Tensor, Transform, Vector3
+
 
 class Actor(Component):
     def Start(self, params):
@@ -15,9 +16,11 @@ class Actor(Component):
 
         if model_path.lower().endswith(".fbx"):
             from ai4animation.Import.FBXImporter import FBX
+
             self.Model = FBX.Create(model_path)
         else:
             from ai4animation.Import.GLBImporter import GLB
+
             self.Model = GLB.Create(model_path)
 
         if bone_names is None:
@@ -28,6 +31,10 @@ class Actor(Component):
         if bone_names is None:
             bone_names = self.Model.JointNames
 
+        # save input params
+        self.ModelPath = model_path
+        self.BoneNames = bone_names
+
         # create missing nodes on the fly
         self.Bones = []
         self.NameToBoneMap = {}
@@ -35,14 +42,16 @@ class Actor(Component):
         for i, name in enumerate(bone_names):
             entity = self.NameToEntity.get(name)
             if entity is None:
-                entity = AI4Animation.Scene.AddEntity(name, position=None, rotation=None, parent=self.Entity)
+                entity = AI4Animation.Scene.AddEntity(
+                    name, position=None, rotation=None, parent=self.Entity
+                )
                 self.NameToEntity[name] = entity
 
             bone = self.Bone(self, i, entity)
             self.Bones.append(bone)
             self.NameToBoneMap[name] = bone
 
-        # parent-child relationships 
+        # parent-child relationships
         for bone in self.Bones:
             parent_entity = bone.Entity.FindParent(bone_names)
             if parent_entity is not None:
@@ -62,6 +71,13 @@ class Actor(Component):
 
     def Update(self):
         pass
+
+    def CreateCopy(self, name=None):
+        entity = AI4Animation.Scene.AddEntity(
+            self.Entity.Name if name is None else name
+        )
+        actor = entity.AddComponent(Actor, self.ModelPath, self.BoneNames, True)
+        return actor
 
     def GetBone(self, name):
         bone = self.NameToBoneMap.get(name)
@@ -348,7 +364,9 @@ class Actor(Component):
         )
 
         self.NameToEntity = {
-            name: AI4Animation.Scene.AddEntity(name, position=None, rotation=None, parent=self.Entity)
+            name: AI4Animation.Scene.AddEntity(
+                name, position=None, rotation=None, parent=self.Entity
+            )
             for name in names
         }
         entities = list(self.NameToEntity.values())

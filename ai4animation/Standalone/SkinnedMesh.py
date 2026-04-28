@@ -6,7 +6,7 @@ import cffi
 import numpy as np
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Math import Tensor
-from pyray import Matrix, Mesh, load_model_from_mesh
+from pyray import load_model_from_mesh, Matrix, Mesh
 from raylib import (
     LoadImageFromMemory,
     LoadTextureFromImage,
@@ -77,8 +77,13 @@ class SkinnedMesh:
             vertices = array("f", mesh.Vertices.flatten())
             normals = array("f", mesh.Normals.flatten())
             triangles = array("H", mesh.Triangles.flatten().astype(np.uint16))
-            if getattr(mesh, "TexCoords", None) is not None and len(mesh.TexCoords) == vertexCount:
-                texcoords = array("f", np.asarray(mesh.TexCoords, dtype=np.float32).flatten())
+            if (
+                getattr(mesh, "TexCoords", None) is not None
+                and len(mesh.TexCoords) == vertexCount
+            ):
+                texcoords = array(
+                    "f", np.asarray(mesh.TexCoords, dtype=np.float32).flatten()
+                )
             else:
                 texcoords = array("f", [0.5, 0.5] * vertexCount)
 
@@ -135,7 +140,9 @@ class SkinnedMesh:
             # Cache numpy view of bone matrices for efficient updates
             gpu_mesh = raylib_model.meshes[0]
             matView = np.frombuffer(
-                ffi.buffer(gpu_mesh.boneMatrices, gpu_mesh.boneCount * ffi.sizeof(Matrix())),
+                ffi.buffer(
+                    gpu_mesh.boneMatrices, gpu_mesh.boneCount * ffi.sizeof(Matrix())
+                ),
                 dtype=np.float32,
             ).reshape(gpu_mesh.boneCount, 4, 4)
             self.BoneMatrixViews.append(matView)

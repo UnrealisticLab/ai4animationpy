@@ -1,57 +1,39 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
-import torch
+
 import torch.nn as nn
-from ai4animation.AI import Modules, Stats
+from ai4animation.AI import Losses, Modules, Stats
 
 
 class Model(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, dropout):
         super(Model, self).__init__()
 
-        self.XStats = Stats.RunningStats(input_dim)
-        self.YStats = Stats.RunningStats(output_dim)
-
-        self.XDim = input_dim
-        self.YDim = output_dim
+        self.InputStats = Stats.RunningStats(input_dim)
+        self.OutputStats = Stats.RunningStats(output_dim)
 
         self.Layers = Modules.LinearEncoder(input_dim, hidden_dim, output_dim, dropout)
 
+    def input_dim(self):
+        return self.InputStats.Dim
+
+    def output_dim(self):
+        return self.OutputStats.Dim
+
     def forward(self, x):
-        x = self.XStats.Normalize(x)
-        y = self.Layers(x)
-        return self.YStats.Denormalize(y)
+        z = self.InputStats.Normalize(x)
+        z = self.Layers(z)
+        y = self.OutputStats.Denormalize(z)
+        return y
 
     def learn(self, input, output, update_stats):
-        input = (
-            self.XStats.UpdateAndNormalize(input)
-            if update_stats
-            else self.XStats.Normalize(input)
-        )
-        output = (
-            self.YStats.UpdateAndNormalize(output)
-            if update_stats
-            else self.YStats.Normalize(output)
-        )
+        if update_stats:
+            self.InputStats.Update(input)
+            self.OutputStats.Update(output)
 
-        y = self.Layers(input)
+        input = self.InputStats.Normalize(input)
+        output = self.OutputStats.Normalize(output)
+        prediction = self.Layers(input)
 
-        mse_fn = nn.MSELoss()
-        pred = self.YStats.Denormalize(y)
-        loss = mse_fn(y, output)
-        return {"Y": pred}, {"MSE": loss}
+        loss = Losses.MSE(prediction, output)
 
-    # def save(self, path, onnxModel=True, torchModel=True):
-    #     if onnxModel:
-    #         print("Saving ONNX model.")
-    #         utility.SaveONNX(
-    #             path=path+'.onnx',
-    #             model=self,
-    #             input_size=(
-    #                 torch.zeros(1, self.XDim)
-    #             ),
-    #             input_names=['X'],
-    #             output_names=['Y']
-    #         )
-    #     if torchModel:
-    #         print("Saving PyTorch model.")
-    #         torch.save(self, path+'.pt')
+        return {"MSE Loss": loss}

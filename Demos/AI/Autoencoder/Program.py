@@ -6,13 +6,12 @@ from pathlib import Path
 import torch
 from ai4animation import (
     Actor,
-    AdamW,
     AI4Animation,
     Autoencoder,
-    CyclicScheduler,
     DataSampler,
     Dataset,
     FeedTensor,
+    MirrorModule,
     MotionEditor,
     MotionModule,
     Plotting,
@@ -31,10 +30,12 @@ ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Cranberry")
 sys.path.append(ASSETS_PATH)
 import Definitions
 
-BONES = Definitions.FULL_BODY_NAMES
-FRAMERATE = 30
+EPOCH_COUNT = 150
 BATCH_SIZE = 32
-FEATURE_DIM = 12*len(BONES)
+FRAMERATE = 30
+DRAW_INTERVAL = 500
+BONES = Definitions.FULL_BODY_NAMES
+FEATURE_DIM = 12 * len(BONES)
 HIDDEN_DIM = 512
 LATENT_DIM = 256
 
@@ -56,6 +57,9 @@ class Program:
                     Definitions.NeckName,
                 ),
                 lambda x: MotionModule(x),
+                lambda x: MirrorModule(
+                    x, Vector3.Axis.ZPositive, Vector3.Create(0, 0, 180)
+                ),
             ],
         )
 
@@ -66,28 +70,22 @@ class Program:
             function=self.GetTrainingFeatures,
         )
 
-        self.EpochCount = 150
-        self.DrawInterval = 500
         self.Network = Tensor.ToDevice(
             Autoencoder.Model(
                 feature_dim=FEATURE_DIM,
                 hidden_dim=HIDDEN_DIM,
                 latent_dim=LATENT_DIM,
-                dropout=0.1,
             )
         )
-        self.Optimizer = AdamW(self.Network.parameters(), lr=1e-4, weight_decay=1e-4)
-        self.Scheduler = CyclicScheduler(
-            optimizer=self.Optimizer,
-            batch_size=self.DataSampler.BatchSize,
-            epoch_size=self.DataSampler.SampleCount,
-            restart_period=10,
-            t_mult=2,
-            policy="cosine",
-            verbose=True,
+
+        self.Optimizer = Utility.CosineAnnealingOptimizer(
+            self.Network.parameters(),
+            self.DataSampler.BatchSize,
+            self.DataSampler.SampleCount,
         )
+
         self.LossHistory = Plotting.LossHistory(
-            "Loss History", drawInterval=self.DrawInterval, yScale="log"
+            "Loss History", drawInterval=DRAW_INTERVAL, yScale="log"
         )
 
         self.Trainer = self.Training()
@@ -113,19 +111,16 @@ class Program:
             pass
 
     def Training(self):
-        for epoch in range(1, self.EpochCount + 1):
+        for epoch in range(1, EPOCH_COUNT + 1):
+            print("Epoch", epoch)
             for batch in self.DataSampler.SampleBatchesWithinMotions(
-                epoch, self.EpochCount
+                epoch, EPOCH_COUNT
             ):
-                _, losses = self.Network.learn(batch, epoch == 1)
-                self.Optimizer.zero_grad()
-                sum(losses.values()).backward()
-                self.Optimizer.step()
-                self.Scheduler.batch_step()
-                for k, v in losses.items():
+                _, loss = self.Network.learn(batch, epoch == 1)
+                self.Optimizer.Update(batch.shape[0], loss["MSE Loss"])
+                for k, v in loss.items():
                     self.LossHistory.Add((Plotting.ToNumpy(v), k))
                 yield
-            self.Scheduler.step()
             self.LossHistory.Print()
 
     def GetTrainingFeatures(self, batch):
@@ -157,7 +152,9 @@ class Program:
     def GetEditorFeatures(self):
         features = FeedTensor("X", FEATURE_DIM)
         root = self.Editor.Actor.Root
-        transforms = Transform.TransformationTo(self.Editor.Actor.GetTransforms(BONES), root)
+        transforms = Transform.TransformationTo(
+            self.Editor.Actor.GetTransforms(BONES), root
+        )
         velocities = Vector3.DirectionTo(self.Editor.Actor.GetVelocities(BONES), root)
         features.Feed(Transform.GetPosition(transforms))
         features.Feed(Transform.GetAxisZ(transforms))
@@ -176,7 +173,9 @@ class Program:
                 Vector3.PositionFrom(output.ReadVector3(len(BONES)), self.Actor.Root)
             )
             self.Actor.SetRotations(
-                Rotation.RotationFrom(output.ReadRotation3D(len(BONES)), self.Actor.Root)
+                Rotation.RotationFrom(
+                    output.ReadRotation3D(len(BONES)), self.Actor.Root
+                )
             )
             self.Actor.SetVelocities(
                 Vector3.DirectionFrom(output.ReadVector3(len(BONES)), self.Actor.Root)

@@ -78,6 +78,23 @@ def GetAxisZ(tensor):
     return tensor[..., :3, 2]
 
 
+def Angle(A, B):
+    A = Transform.GetRotation(A)
+    B = Transform.GetRotation(B)
+    delta = Multiply(Inverse(A), B)
+    trace = delta[..., 0, 0] + delta[..., 1, 1] + delta[..., 2, 2]
+    angles = Tensor.Rad2Deg(Tensor.ArcCos(Tensor.Clamp((trace - 1.0) / 2.0, -1.0, 1.0)))
+    return angles
+
+    # A = Transform.GetRotation(A)
+    # B = Transform.GetRotation(B)
+    # delta = RotationTo(B, A)
+    # quat = Quaternion.FromMatrix(delta)
+    # w = quat[..., 3]
+    # angle = Tensor.Rad2Deg(2.0 * Tensor.ArcCos(w))
+    # return angle
+
+
 def Inverse(tensor):
     # T = Tensor.Transpose(tensor)
     # T = Normalize(T)

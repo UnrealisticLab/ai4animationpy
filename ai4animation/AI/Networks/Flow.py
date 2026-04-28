@@ -4,7 +4,7 @@ import torch.nn as nn
 from ai4animation.AI import Modules, Stats
 
 
-class Flow(nn.Module):
+class Model(nn.Module):
     def __init__(self, flow_dim, output_dim):
         super().__init__()
         self.Stats = Stats.RunningStats(output_dim)
