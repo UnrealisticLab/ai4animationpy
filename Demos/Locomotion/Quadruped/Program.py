@@ -287,7 +287,14 @@ class Program:
             lie_requested = AI4Animation.Standalone.IO.IsL2Down()
         else:
             keyboard_move = AI4Animation.Standalone.IO.GetWASDQE()
-            move_axes = [keyboard_move[0], keyboard_move[2]]
+
+            move_axes = Vector3.Create(keyboard_move[0], 0, keyboard_move[2])
+            if keyboard_move[1] != 0:
+                self.RotationIntegral += 120.0 * keyboard_move[1] * Time.DeltaTime
+                move_axes = Vector3.DirectionFrom(move_axes, Rotation.Euler(0, self.RotationIntegral, 0))
+            else:
+                self.RotationIntegral = 0.0
+            move_axes = [move_axes[0], move_axes[2]]
 
             if Vector3.Length(keyboard_move) > INPUT_DEADZONE:
                 desired_speed = LOCOMOTION_MODES[self._select_locomotion_mode_keyboard()]
