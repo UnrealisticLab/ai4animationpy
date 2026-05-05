@@ -179,9 +179,13 @@ class Program:
             "Guidance", self.Actor.GetBoneNames(), self.Actor.GetPositions().copy()
         )
         self.GuidanceTemplates = {}
-        directory = "Guidances"
-        for path in sorted(os.listdir(directory)):
-            with np.load(directory + "/" + path, allow_pickle=True) as data:
+        guidance_dir = os.path.join(SCRIPT_DIR, "Guidances")
+        os.makedirs(guidance_dir, exist_ok=True)
+        for path in sorted(os.listdir(guidance_dir)):
+            if not path.endswith(".npz"):
+                continue
+            npz_path = os.path.join(guidance_dir, path)
+            with np.load(npz_path, allow_pickle=True) as data:
                 id = Path(path).stem
                 names = data["Names"]
                 positions = data["Positions"]
@@ -190,7 +194,23 @@ class Program:
                 )
                 print("Added Guidance:", id)
 
-        self.CurrentGuidanceState = "Sit"
+        if not self.GuidanceTemplates:
+            names = self.Actor.GetBoneNames()
+            positions = self.Actor.GetPositions().copy()
+            self.GuidanceTemplates["Sit"] = GuidanceModule.Guidance(
+                "Sit", names, positions
+            )
+            print(
+                "No guidance .npz files in Demos/Locomotion/Quadruped/Guidances — "
+                "using bind pose as 'Sit'. Export styles from the Motion Editor "
+                "(Guidance module Save) into that folder."
+            )
+
+        self.CurrentGuidanceState = (
+            "Sit"
+            if "Sit" in self.GuidanceTemplates
+            else sorted(self.GuidanceTemplates.keys())[0]
+        )
         self.GuidanceControl.Positions = self.GuidanceTemplates[
             self.CurrentGuidanceState
         ].Positions.copy()

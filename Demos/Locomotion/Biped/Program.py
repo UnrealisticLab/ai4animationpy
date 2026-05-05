@@ -80,9 +80,13 @@ class Program:
             "Guidance", self.Actor.GetBoneNames(), self.Actor.GetPositions().copy()
         )
         self.GuidanceTemplates = {}
-        directory = "Guidances"
-        for path in sorted(os.listdir(directory)):
-            with np.load(directory + "/" + path, allow_pickle=True) as data:
+        guidance_dir = os.path.join(SCRIPT_DIR, "Guidances")
+        os.makedirs(guidance_dir, exist_ok=True)
+        for path in sorted(os.listdir(guidance_dir)):
+            if not path.endswith(".npz"):
+                continue
+            npz_path = os.path.join(guidance_dir, path)
+            with np.load(npz_path, allow_pickle=True) as data:
                 id = Path(path).stem
                 names = data["Names"]
                 positions = data["Positions"]
@@ -90,6 +94,18 @@ class Program:
                     id, names, positions
                 )
                 print("Added Guidance:", id)
+
+        if not self.GuidanceTemplates:
+            names = self.Actor.GetBoneNames()
+            positions = self.Actor.GetPositions().copy()
+            self.GuidanceTemplates["Idle"] = GuidanceModule.Guidance(
+                "Idle", names, positions
+            )
+            print(
+                "No guidance .npz files in Demos/Locomotion/Biped/Guidances — "
+                "using bind pose as 'Idle'. Export styles from the Motion Editor "
+                "(Guidance module Save) into that folder for style switching."
+            )
 
         self.GuidanceNames = sorted(self.GuidanceTemplates.keys())
 
@@ -222,8 +238,14 @@ class Program:
         self.SimulationObject.Control(position, direction, velocity, Time.DeltaTime)
 
         speed = Vector3.Length(velocity)
+        idle_key = (
+            "Idle"
+            if "Idle" in self.GuidanceTemplates
+            else self.GuidanceNames[0]
+        )
+        template_key = idle_key if speed < 0.1 else self.SelectedGuidance
         self.GuidanceControl.Positions = self.GuidanceTemplates[
-            "Idle" if speed < 0.1 else self.SelectedGuidance
+            template_key
         ].Positions.copy()
 
         # Correction

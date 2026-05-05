@@ -5,6 +5,10 @@ from ai4animation import AI4Animation, Utility
 from ai4animation.Math import Rotation, Tensor, Transform, Vector3
 
 
+def _scalar_float(x):
+    return float(x.item()) if hasattr(x, "item") else float(x)
+
+
 class Sequence:
     def __init__(self):
         self.Timestamps = None
@@ -52,6 +56,7 @@ class Sequence:
         return 1.0 if Tensor.Mean(Tensor.Flatten(self.Contacts)) > 0.75 else 0.0
 
     def GetIndexPair(self, timestamp: float):
+        timestamp = _scalar_float(timestamp)
         ratio = Utility.Normalize(
             timestamp,
             self.Timestamps[0],
@@ -59,11 +64,11 @@ class Sequence:
             0.0,
             self.Timestamps.size - 1,
         )
-        ratio = Tensor.Clamp(ratio, 0.0, self.Timestamps.size - 1)
+        ratio = _scalar_float(Tensor.Clamp(ratio, 0.0, self.Timestamps.size - 1))
         a = int(math.floor(ratio))
         b = int(math.ceil(ratio))
         w = Utility.Ratio(timestamp, self.Timestamps[a], self.Timestamps[b])
-        w = Tensor.Clamp(w, 0.0, 1.0)
+        w = _scalar_float(Tensor.Clamp(w, 0.0, 1.0))
         return a, b, w
 
     def GetLength(self):

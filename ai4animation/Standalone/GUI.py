@@ -18,6 +18,10 @@ def ScreenHeight():
     return rl.GetScreenHeight()
 
 
+def _scalar_float(x):
+    return float(x.item()) if hasattr(x, "item") else float(x)
+
+
 class Canvas:
     def __init__(self, label, x, y, w, h, scale_width=True, scale_height=True):
         self.Label = label
@@ -715,6 +719,7 @@ def HorizontalPivot(
 ):
     if limits is not None:
         value = Utility.Normalize(value, limits[0], limits[1], 0.0, 1.0)
+    value = _scalar_float(value)
     frameRectangle = Rectangle(x, y, w, h).Screen()
     pivotRectangle = Rectangle(
         x + value * (w - thickness / 2.0), y, w * thickness, h
@@ -744,6 +749,7 @@ def HorizontalBar(
 ):
     if limits is not None:
         value = Utility.Normalize(value, limits[0], limits[1], 0.0, 1.0)
+    value = _scalar_float(value)
     frameRectangle = Rectangle(x, y, w, h).Screen()
     pivotRectangle = Rectangle(x, y, value * w, h).Screen()
     backgroundColor = (
